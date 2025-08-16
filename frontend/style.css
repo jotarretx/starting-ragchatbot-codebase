@@ -245,6 +245,16 @@ header h1 {
     color: var(--text-secondary);
 }
 
+.sources-content a {
+    color: #fb923c !important;
+    text-decoration: underline;
+    font-weight: 600;
+}
+
+.sources-content a:hover {
+    color: #ea580c !important;
+}
+
 /* Markdown formatting styles */
 .message-content h1,
 .message-content h2,
@@ -599,6 +609,31 @@ details[open] .suggested-header::before {
     color: var(--text-secondary);
     font-style: italic;
     text-transform: none;
+}
+
+/* New Chat Button */
+.new-chat-button {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 0.5rem 0;
+    border: none;
+    background: none;
+    text-align: left;
+    width: 100%;
+    outline: none;
+    transition: color 0.2s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.new-chat-button:focus {
+    color: var(--primary-color);
+}
+
+.new-chat-button:hover {
+    color: var(--primary-color);
 }
 
 /* Suggested Questions in Sidebar */

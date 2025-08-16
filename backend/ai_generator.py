@@ -1,24 +1,26 @@
-import anthropic
+import ollama
 from typing import List, Optional, Dict, Any
 
 class AIGenerator:
-    """Handles interactions with Anthropic's Claude API for generating responses"""
+    """Handles interactions with Ollama for generating responses"""
     
     # Static system prompt to avoid rebuilding on each call
-    SYSTEM_PROMPT = """ You are an AI assistant specialized in course materials and educational content with access to a comprehensive search tool for course information.
+    SYSTEM_PROMPT = """ You are an AI assistant specialized in course materials and educational content with access to comprehensive tools for course information.
 
-Search Tool Usage:
-- Use the search tool **only** for questions about specific course content or detailed educational materials
-- **One search per query maximum**
-- Synthesize search results into accurate, fact-based responses
-- If search yields no results, state this clearly without offering alternatives
+Tool Usage:
+- Use the **search_course_content** tool for questions about specific course content or detailed educational materials
+- Use the **get_course_outline** tool for questions about course structure, outlines, lesson lists, or course overview
+- **One tool call per query maximum**
+- Synthesize tool results into accurate, fact-based responses
+- If tools yield no results, state this clearly without offering alternatives
 
 Response Protocol:
-- **General knowledge questions**: Answer using existing knowledge without searching
-- **Course-specific questions**: Search first, then answer
+- **General knowledge questions**: Answer using existing knowledge without using tools
+- **Course content questions**: Use search_course_content tool first, then answer
+- **Course outline questions**: Use get_course_outline tool first, then answer with course title, course link, and complete lesson list (lesson numbers and titles)
 - **No meta-commentary**:
- - Provide direct answers only — no reasoning process, search explanations, or question-type analysis
- - Do not mention "based on the search results"
+ - Provide direct answers only — no reasoning process, tool explanations, or question-type analysis
+ - Do not mention "based on the tool results"
 
 
 All responses must be:
@@ -29,15 +31,18 @@ All responses must be:
 Provide only the direct answer to what was asked.
 """
     
-    def __init__(self, api_key: str, model: str):
-        self.client = anthropic.Anthropic(api_key=api_key)
+    def __init__(self, base_url: str, model: str):
+        self.client = ollama.Client(host=base_url)
         self.model = model
         
         # Pre-build base API parameters
         self.base_params = {
             "model": self.model,
-            "temperature": 0,
-            "max_tokens": 800
+            "stream": False,
+            "options": {
+                "temperature": 0,
+                "num_predict": 800
+            }
         }
     
     def generate_response(self, query: str,
@@ -67,24 +72,25 @@ Provide only the direct answer to what was asked.
         # Prepare API call parameters efficiently
         api_params = {
             **self.base_params,
-            "messages": [{"role": "user", "content": query}],
-            "system": system_content
+            "messages": [
+                {"role": "system", "content": system_content},
+                {"role": "user", "content": query}
+            ]
         }
         
         # Add tools if available
         if tools:
             api_params["tools"] = tools
-            api_params["tool_choice"] = {"type": "auto"}
         
-        # Get response from Claude
-        response = self.client.messages.create(**api_params)
+        # Get response from Ollama
+        response = self.client.chat(**api_params)
         
         # Handle tool execution if needed
-        if response.stop_reason == "tool_use" and tool_manager:
+        if tools and "tool_calls" in response["message"] and response["message"]["tool_calls"]:
             return self._handle_tool_execution(response, api_params, tool_manager)
         
         # Return direct response
-        return response.content[0].text
+        return response["message"]["content"]
     
     def _handle_tool_execution(self, initial_response, base_params: Dict[str, Any], tool_manager):
         """
@@ -102,34 +108,30 @@ Provide only the direct answer to what was asked.
         messages = base_params["messages"].copy()
         
         # Add AI's tool use response
-        messages.append({"role": "assistant", "content": initial_response.content})
+        messages.append(initial_response["message"])
         
         # Execute all tool calls and collect results
-        tool_results = []
-        for content_block in initial_response.content:
-            if content_block.type == "tool_use":
-                tool_result = tool_manager.execute_tool(
-                    content_block.name, 
-                    **content_block.input
-                )
-                
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": content_block.id,
-                    "content": tool_result
-                })
-        
-        # Add tool results as single message
-        if tool_results:
-            messages.append({"role": "user", "content": tool_results})
+        tool_calls = initial_response["message"]["tool_calls"]
+        for tool_call in tool_calls:
+            function_name = tool_call["function"]["name"]
+            function_args = tool_call["function"]["arguments"]
+            
+            # Execute the tool
+            tool_result = tool_manager.execute_tool(function_name, **function_args)
+            
+            # Add tool result message
+            messages.append({
+                "role": "tool",
+                "content": tool_result,
+                "tool_call_id": tool_call.get("id", "")
+            })
         
         # Prepare final API call without tools
         final_params = {
             **self.base_params,
-            "messages": messages,
-            "system": base_params["system"]
+            "messages": messages
         }
         
         # Get final response
-        final_response = self.client.messages.create(**final_params)
-        return final_response.content[0].text
+        final_response = self.client.chat(**final_params)
+        return final_response["message"]["content"]

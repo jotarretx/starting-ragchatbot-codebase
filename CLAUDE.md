@@ -23,14 +23,24 @@ uv add package_name
 ```
 
 ### Environment Setup
-Create `.env` file in root with:
+**Prerequisites:** Install Ollama and download Mistral 7B model:
+```bash
+# Install Ollama (run with sudo)
+curl -fsSL https://ollama.com/install.sh | sh
+
+# Download Mistral 7B model
+ollama pull mistral:7b
 ```
-ANTHROPIC_API_KEY=your_api_key_here
+
+Optional `.env` configuration (defaults work for local setup):
+```
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=mistral:7b
 ```
 
 ## Architecture Overview
 
-This is a **RAG (Retrieval-Augmented Generation) system** for course materials with a tool-calling architecture where Claude dynamically searches course content during response generation.
+This is a **RAG (Retrieval-Augmented Generation) system** for course materials with a tool-calling architecture where the local AI model (Mistral 7B via Ollama) dynamically searches course content during response generation.
 
 ### Core Components
 
@@ -52,13 +62,13 @@ This is a **RAG (Retrieval-Augmented Generation) system** for course materials w
 - Handles both exact course matching and fuzzy name resolution
 
 **Tool-Calling Architecture (`search_tools.py`)**
-- `CourseSearchTool` exposes vector search as a function to Claude
+- `CourseSearchTool` exposes vector search as a function to the AI model
 - AI decides when to search based on query context (not every query triggers search)
 - Supports course name filtering and lesson-specific searches
 - Source tracking for citation purposes
 
 **AI Generation (`ai_generator.py`)**
-- Anthropic Claude integration with tool calling capabilities
+- Ollama integration with Mistral 7B model and tool calling capabilities
 - System prompt optimized for educational content responses
 - Temperature 0 for consistent responses, 800 token limit
 - Processes tool results during response generation
@@ -67,7 +77,7 @@ This is a **RAG (Retrieval-Augmented Generation) system** for course materials w
 
 1. **Document Ingestion**: Course files → Document processor → Vector chunks → ChromaDB
 2. **Query Processing**: User query → RAG system → AI generator with tools
-3. **Dynamic Search**: Claude decides to use search tool → Vector similarity search → Context injection
+3. **Dynamic Search**: Mistral 7B decides to use search tool → Vector similarity search → Context injection
 4. **Response Generation**: AI synthesizes search results → Structured response with sources
 
 ### Key Configuration (`config.py`)
@@ -76,7 +86,7 @@ This is a **RAG (Retrieval-Augmented Generation) system** for course materials w
 - `CHUNK_OVERLAP`: 100 characters for context preservation  
 - `MAX_RESULTS`: 5 search results per query
 - `MAX_HISTORY`: 2 conversation turns for context
-- `ANTHROPIC_MODEL`: claude-sonnet-4-20250514
+- `OLLAMA_MODEL`: mistral:7b (local model via Ollama)
 
 ### Frontend Integration
 
