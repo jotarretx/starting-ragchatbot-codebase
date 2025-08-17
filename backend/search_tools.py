@@ -65,6 +65,14 @@ class CourseSearchTool(Tool):
             Formatted search results or error message
         """
         
+        # Add console logging for tool execution
+        filter_info = ""
+        if course_name:
+            filter_info += f" course='{course_name}'"
+        if lesson_number:
+            filter_info += f" lesson={lesson_number}"
+        print(f"🔧 CourseSearchTool executed: query='{query[:50]}...'{filter_info}")
+        
         # Use the vector store's unified search interface
         results = self.store.search(
             query=query,
@@ -125,6 +133,9 @@ class CourseSearchTool(Tool):
         # Store sources for retrieval
         self.last_sources = sources
         
+        # Log results
+        print(f"   → Found {len(formatted)} results")
+        
         return "\n\n".join(formatted)
 
 
@@ -164,6 +175,9 @@ class CourseOutlineTool(Tool):
         Returns:
             Formatted course outline or error message
         """
+        
+        # Add console logging for tool execution
+        print(f"🔧 CourseOutlineTool executed: course='{course_name}'")
         # Resolve course name using existing method
         course_title = self.store._resolve_course_name(course_name)
         if not course_title:
@@ -183,7 +197,9 @@ class CourseOutlineTool(Tool):
             return f"No course metadata found for '{course_title}'"
         
         # Format the outline
-        return self._format_outline(course_metadata)
+        result = self._format_outline(course_metadata)
+        print(f"   → Generated outline for {course_title}")
+        return result
     
     def _format_outline(self, course_metadata: Dict[str, Any]) -> str:
         """Format course metadata into a structured outline"""

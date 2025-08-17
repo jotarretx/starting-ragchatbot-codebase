@@ -16,7 +16,7 @@ class RAGSystem:
         # Initialize core components
         self.document_processor = DocumentProcessor(config.CHUNK_SIZE, config.CHUNK_OVERLAP)
         self.vector_store = VectorStore(config.CHROMA_PATH, config.EMBEDDING_MODEL, config.MAX_RESULTS)
-        self.ai_generator = AIGenerator(config.OLLAMA_BASE_URL, config.OLLAMA_MODEL)
+        self.ai_generator = AIGenerator(config.OLLAMA_BASE_URL, config.OLLAMA_MODEL, config.MAX_TOOL_ROUNDS)
         self.session_manager = SessionManager(config.MAX_HISTORY)
         
         # Initialize search tools
@@ -101,7 +101,7 @@ class RAGSystem:
         
         return total_courses, total_chunks
     
-    def query(self, query: str, session_id: Optional[str] = None) -> Tuple[str, List[str]]:
+    def query(self, query: str, session_id: Optional[str] = None) -> Tuple[str, List[str], List[str]]:
         """
         Process a user query using the RAG system with mandatory search.
         
@@ -110,7 +110,7 @@ class RAGSystem:
             session_id: Optional session ID for conversation context
             
         Returns:
-            Tuple of (response, sources list)
+            Tuple of (response, sources list, tools_used list)
         """
         # Always perform search first to get relevant context
         search_results = self.vector_store.search(query=query)
@@ -184,8 +184,14 @@ Please provide a general helpful response, but note that no specific course cont
         if session_id:
             self.session_manager.add_exchange(session_id, query, response)
         
-        # Return response with sources
-        return response, sources
+        # Track tools used - in direct search path, we always use vector search
+        tools_used = ["direct_vector_search"]
+        
+        # Add console logging
+        print(f"🔍 Direct search executed for query: '{query[:50]}...' - Found {len(sources)} sources")
+        
+        # Return response with sources and tools used
+        return response, sources, tools_used
     
     def get_course_analytics(self) -> Dict:
         """Get analytics about the course catalog"""

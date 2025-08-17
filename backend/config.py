@@ -21,6 +21,9 @@ class Config:
     MAX_RESULTS: int = 5         # Maximum search results to return
     MAX_HISTORY: int = 2         # Number of conversation messages to remember
     
+    # Tool calling settings
+    MAX_TOOL_ROUNDS: int = 2     # Maximum rounds of tool calling per query
+    
     # Database paths
     CHROMA_PATH: str = "./chroma_db"  # ChromaDB storage location
 

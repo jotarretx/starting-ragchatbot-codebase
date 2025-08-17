@@ -45,6 +45,7 @@ class QueryResponse(BaseModel):
     answer: str
     sources: List[Dict[str, Any]]
     session_id: str
+    tools_used: List[str]
 
 class CourseStats(BaseModel):
     """Response model for course statistics"""
@@ -71,13 +72,45 @@ async def query_documents(request: QueryRequest):
         if not session_id:
             session_id = rag_system.session_manager.create_session()
         
-        # Process query using RAG system
-        answer, sources = rag_system.query(request.query, session_id)
+        # Process query using RAG system with AI tool selection (like original)
+        # Get conversation history if session exists
+        history = None
+        if session_id:
+            history = rag_system.session_manager.get_conversation_history(session_id)
+        
+        # Use AI generator with tools (AI decides whether to search)
+        tools = rag_system.tool_manager.get_tool_definitions()
+        
+        print(f"🤖 Processing query with AI tool selection: '{request.query[:50]}...'")
+        
+        answer = rag_system.ai_generator.generate_response(
+            query=request.query,
+            conversation_history=history,
+            tools=tools,
+            tool_manager=rag_system.tool_manager
+        )
+        
+        # Get sources from the last search operation
+        sources = rag_system.tool_manager.get_last_sources()
+        
+        # Track which tools were used
+        tools_used = []
+        if sources:
+            tools_used.append("ai_directed_search")
+        else:
+            tools_used.append("ai_general_knowledge")
+        
+        # Update conversation history
+        rag_system.session_manager.add_exchange(session_id, request.query, answer)
+        
+        # Reset sources for next query
+        rag_system.tool_manager.reset_sources()
         
         return QueryResponse(
             answer=answer,
             sources=sources,
-            session_id=session_id
+            session_id=session_id,
+            tools_used=tools_used
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -90,6 +123,57 @@ async def get_course_stats():
         return CourseStats(
             total_courses=analytics["total_courses"],
             course_titles=analytics["course_titles"]
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/debug/query", response_model=QueryResponse)
+async def debug_query_with_ai_tools(request: QueryRequest):
+    """Debug endpoint that uses AI tool-based path instead of direct search"""
+    try:
+        # Create session if not provided
+        session_id = request.session_id
+        if not session_id:
+            session_id = rag_system.session_manager.create_session()
+        
+        # Get conversation history if session exists
+        history = None
+        if session_id:
+            history = rag_system.session_manager.get_conversation_history(session_id)
+        
+        # Use AI generator with tools (AI decides whether to search)
+        tools = rag_system.tool_manager.get_tool_definitions()
+        
+        print(f"🤖 AI tool-based query: '{request.query[:50]}...' with {len(tools)} available tools")
+        
+        response = rag_system.ai_generator.generate_response(
+            query=request.query,
+            conversation_history=history,
+            tools=tools,
+            tool_manager=rag_system.tool_manager
+        )
+        
+        # Get sources from the last search operation
+        sources = rag_system.tool_manager.get_last_sources()
+        
+        # Track which tools were used (check if any tools have sources)
+        tools_used = []
+        if sources:
+            tools_used.append("ai_directed_search")
+        else:
+            tools_used.append("ai_general_knowledge")
+        
+        # Update conversation history
+        rag_system.session_manager.add_exchange(session_id, request.query, response)
+        
+        # Reset sources for next query
+        rag_system.tool_manager.reset_sources()
+        
+        return QueryResponse(
+            answer=response,
+            sources=sources,
+            session_id=session_id,
+            tools_used=tools_used
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
