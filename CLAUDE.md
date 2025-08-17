@@ -22,6 +22,20 @@ uv sync
 uv add package_name
 ```
 
+### Code Quality
+```bash
+# Format code with Black
+./scripts/format.sh
+
+# Run quality checks (formatting + tests)
+./scripts/check.sh
+
+# Manual commands
+uv run black backend/ main.py              # Format code
+uv run black --check --diff backend/ main.py  # Check formatting
+uv run pytest backend/tests/ -v            # Run tests
+```
+
 ### Environment Setup
 **Prerequisites:** Install Ollama and download Mistral 7B model:
 ```bash
@@ -105,8 +119,8 @@ This is a **RAG (Retrieval-Augmented Generation) system** for course materials w
 
 ### Development Notes
 
-- No test framework currently implemented
-- No linting/formatting tools configured
+- Test framework: pytest (see `backend/tests/`)
+- Code formatting: Black (configured for consistent style)
 - Uses `uv` for Python dependency management
 - ChromaDB data persists in `./chroma_db/` 
 - Application auto-loads documents from `/docs` on startup

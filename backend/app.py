@@ -1,4 +1,5 @@
 import warnings
+
 warnings.filterwarnings("ignore", message="resource_tracker: There appear to be.*")
 
 from fastapi import FastAPI, HTTPException
@@ -16,10 +17,7 @@ from rag_system import RAGSystem
 app = FastAPI(title="Course Materials RAG System", root_path="")
 
 # Add trusted host middleware for proxy
-app.add_middleware(
-    TrustedHostMiddleware,
-    allowed_hosts=["*"]
-)
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
 
 # Enable CORS with proper settings for proxy
 app.add_middleware(
@@ -34,34 +32,46 @@ app.add_middleware(
 # Initialize RAG system
 rag_system = RAGSystem(config)
 
+
 # Pydantic models for request/response
 class QueryRequest(BaseModel):
     """Request model for course queries"""
+
     query: str
     session_id: Optional[str] = None
 
+
 class QueryResponse(BaseModel):
     """Response model for course queries"""
+
     answer: str
     sources: List[Dict[str, Any]]
     session_id: str
     tools_used: List[str]
 
+
 class CourseStats(BaseModel):
     """Response model for course statistics"""
+
     total_courses: int
     course_titles: List[str]
 
+
 class NewSessionRequest(BaseModel):
     """Request model for new session creation"""
+
     old_session_id: Optional[str] = None
+
 
 class NewSessionResponse(BaseModel):
     """Response model for new session creation"""
+
     new_session_id: str
     message: str
 
+
 # API Endpoints
+
 
 @app.post("/api/query", response_model=QueryResponse)
 async def query_documents(request: QueryRequest):
@@ -71,49 +81,47 @@ async def query_documents(request: QueryRequest):
         session_id = request.session_id
         if not session_id:
             session_id = rag_system.session_manager.create_session()
-        
+
         # Process query using RAG system with AI tool selection (like original)
         # Get conversation history if session exists
         history = None
         if session_id:
             history = rag_system.session_manager.get_conversation_history(session_id)
-        
+
         # Use AI generator with tools (AI decides whether to search)
         tools = rag_system.tool_manager.get_tool_definitions()
-        
+
         print(f"🤖 Processing query with AI tool selection: '{request.query[:50]}...'")
-        
+
         answer = rag_system.ai_generator.generate_response(
             query=request.query,
             conversation_history=history,
             tools=tools,
-            tool_manager=rag_system.tool_manager
+            tool_manager=rag_system.tool_manager,
         )
-        
+
         # Get sources from the last search operation
         sources = rag_system.tool_manager.get_last_sources()
-        
+
         # Track which tools were used
         tools_used = []
         if sources:
             tools_used.append("ai_directed_search")
         else:
             tools_used.append("ai_general_knowledge")
-        
+
         # Update conversation history
         rag_system.session_manager.add_exchange(session_id, request.query, answer)
-        
+
         # Reset sources for next query
         rag_system.tool_manager.reset_sources()
-        
+
         return QueryResponse(
-            answer=answer,
-            sources=sources,
-            session_id=session_id,
-            tools_used=tools_used
+            answer=answer, sources=sources, session_id=session_id, tools_used=tools_used
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/courses", response_model=CourseStats)
 async def get_course_stats():
@@ -122,10 +130,11 @@ async def get_course_stats():
         analytics = rag_system.get_course_analytics()
         return CourseStats(
             total_courses=analytics["total_courses"],
-            course_titles=analytics["course_titles"]
+            course_titles=analytics["course_titles"],
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/api/debug/query", response_model=QueryResponse)
 async def debug_query_with_ai_tools(request: QueryRequest):
@@ -135,48 +144,51 @@ async def debug_query_with_ai_tools(request: QueryRequest):
         session_id = request.session_id
         if not session_id:
             session_id = rag_system.session_manager.create_session()
-        
+
         # Get conversation history if session exists
         history = None
         if session_id:
             history = rag_system.session_manager.get_conversation_history(session_id)
-        
+
         # Use AI generator with tools (AI decides whether to search)
         tools = rag_system.tool_manager.get_tool_definitions()
-        
-        print(f"🤖 AI tool-based query: '{request.query[:50]}...' with {len(tools)} available tools")
-        
+
+        print(
+            f"🤖 AI tool-based query: '{request.query[:50]}...' with {len(tools)} available tools"
+        )
+
         response = rag_system.ai_generator.generate_response(
             query=request.query,
             conversation_history=history,
             tools=tools,
-            tool_manager=rag_system.tool_manager
+            tool_manager=rag_system.tool_manager,
         )
-        
+
         # Get sources from the last search operation
         sources = rag_system.tool_manager.get_last_sources()
-        
+
         # Track which tools were used (check if any tools have sources)
         tools_used = []
         if sources:
             tools_used.append("ai_directed_search")
         else:
             tools_used.append("ai_general_knowledge")
-        
+
         # Update conversation history
         rag_system.session_manager.add_exchange(session_id, request.query, response)
-        
+
         # Reset sources for next query
         rag_system.tool_manager.reset_sources()
-        
+
         return QueryResponse(
             answer=response,
             sources=sources,
             session_id=session_id,
-            tools_used=tools_used
+            tools_used=tools_used,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/api/new-session", response_model=NewSessionResponse)
 async def create_new_session(request: NewSessionRequest):
@@ -185,16 +197,17 @@ async def create_new_session(request: NewSessionRequest):
         # Clear old session if provided
         if request.old_session_id:
             rag_system.session_manager.clear_session(request.old_session_id)
-        
+
         # Create new session
         new_session_id = rag_system.session_manager.create_session()
-        
+
         return NewSessionResponse(
             new_session_id=new_session_id,
-            message="New chat session created successfully"
+            message="New chat session created successfully",
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.on_event("startup")
 async def startup_event():
@@ -203,10 +216,13 @@ async def startup_event():
     if os.path.exists(docs_path):
         print("Loading initial documents...")
         try:
-            courses, chunks = rag_system.add_course_folder(docs_path, clear_existing=False)
+            courses, chunks = rag_system.add_course_folder(
+                docs_path, clear_existing=False
+            )
             print(f"Loaded {courses} courses with {chunks} chunks")
         except Exception as e:
             print(f"Error loading documents: {e}")
+
 
 # Custom static file handler with no-cache headers for development
 from fastapi.staticfiles import StaticFiles
@@ -224,7 +240,7 @@ class DevStaticFiles(StaticFiles):
             response.headers["Pragma"] = "no-cache"
             response.headers["Expires"] = "0"
         return response
-    
-    
+
+
 # Serve static files for the frontend
 app.mount("/", StaticFiles(directory="../frontend", html=True), name="static")
